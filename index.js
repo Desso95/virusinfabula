@@ -7,33 +7,38 @@ const telegramToken = telegramCredentials.telegramToken;
 
 var state =
 {
+  chat: "",
+  chatName: "",
   users: new Object(),
   gamePrepared: false,
   gameStarted: false,
   players: new Object(),
 }
 
-app.use(bodyParser.json()); // for parsing application/json
-
+app.use(bodyParser.json()) // for parsing application/json
 app.use(
   bodyParser.urlencoded({
     extended: true
   })
-); // for parsing application/x-www-form-urlencoded
-//This is the route the API will call
+) // for parsing application/x-www-form-urlencoded
 
+//This is the route the API will call
 app.post('/', function(req, res)
 {
   const { message } = req.body;
+
   if (!message) {
     // In case a message is not present, do nothing and return an empty response
     return res.end();
   }
+
   // If we've gotten this far, it means that we have received a message.
   //Each message contains "text" and a "chat" object, which has an "id" which is the chat id
+
   const messageContent = message.text;
   const sender = message.from.id.toString();
   const sourceChat = message.chat.id;
+
   if(message.chat.type == "private")
   {
     state.users[sender] = {chatID: sender, username: message.from.username};
@@ -46,6 +51,11 @@ app.post('/', function(req, res)
   }
   else if(message.chat.type == "group")
   {
+    if(state.chat == "" || state.chatName == "")
+    {
+      state.chat = sourceChat;
+      state.chatName = message.chat.title;
+    }
     if(messageContent!= undefined && messageContent.startsWith("/dump"))
     {
       writeTo(res, sourceChat, message);
@@ -87,7 +97,7 @@ app.post('/', function(req, res)
         {
           state.players[sender] = state.users[sender];
           writeTo(res, sourceChat, state.players[sender].username + " si è unito alla partita");
-          writeTo(res, state.players[sender].chatID , "Ciao " + state.players[sender].username  + ", ti sei unito a una partita");
+          writeTo(res, state.players[sender].chatID , "Ciao " + state.players[sender].username  + ", ti sei unito a una partita nel gruppo " + state.chatName);
         }
         else
         {
@@ -108,18 +118,28 @@ app.post('/', function(req, res)
         state.gameStarted = true;
         var response = "La partita ha inizio, i giocatori sono: ";
         var playerlist = "";
+        var playersNumber = 0;
         Object.keys(state.players).forEach((player) =>
         {
           if(playerlist == "")
           {
-            playerlist = state.players[player].username;
+            playerlist += state.players[player].username;
           }
           else
           {
-            playerlist = playerlist + ", " + state.players[player].username;
+            playerlist += ", " + state.players[player].username;
           }
+          playersNumber++;
         });
         writeTo(res, sourceChat, response + playerlist);
+        var littleFactionNumber = Math.floor(Math.log2(playersNumber));
+        var neutralPlayersNumber = 0;
+        var bigFactionNumber = playersNumber - littleFactionNumber - neutralPlayersNumber;
+        //TODO: assign roles
+        //TODO: initialize player values
+        //TODO: write roles to private players
+        //TODO: write roles list to group chat
+        //TODO: role the first day
       }
       else
       {
@@ -142,8 +162,9 @@ app.post('/', function(req, res)
       if(Object.keys(state.players).includes(sender) && state.gameStarted)
       {
         state.gameStarted = false;
+        const concluder = state.players[sender].username;
         state.players = new Object();
-        writeTo(res, sourceChat, state.players[sender].username + " ha concluso la partita");
+        writeTo(res, sourceChat, concluder + " ha concluso la partita");
       }
       else
       {
@@ -163,6 +184,7 @@ function writeTo(res, toUser, messageText)
   // Respond by hitting the telegram bot API and responding to the approprite chat_id
   // Remember to use your own API toked instead of the one below  "https://api.telegram.org/bot<your_api_token>/sendMessage"
   const telegramAPI = 'https://api.telegram.org/bot' + telegramToken +'/sendMessage';
+
   axios
   .post(telegramAPI,
   {
